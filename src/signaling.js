@@ -28,13 +28,21 @@ export async function claimTutoPhone(code, uid) {
   try { await claimRole(pairing.sessionId, 'tutoPhoneUid', uid); } catch (error) { throw new Error('Ese TV ya está vinculado a otro celular.'); }
   return pairing.sessionId;
 }
-export async function createInvite(sessionId) { const token = randomHex(24); const expiresAt = Date.now() + SESSION_LIFETIME_MS; await set(inviteRef(token), { sessionId: sessionId, expiresAt: expiresAt }); return { token: token, expiresAt: expiresAt }; }
+export async function createInvite(sessionId) {
+  const session = (await get(sessionRef(sessionId))).val();
+  if (!session || session.expiresAt <= Date.now() || session.endedBy) { throw new Error('La sesión terminó.'); }
+  const token = session.inviteToken || randomHex(24);
+  if (!session.inviteToken) { await set(ref(db, 'sessions/' + sessionId + '/inviteToken'), token); }
+  const existing = (await get(inviteRef(token))).val();
+  if (!existing) { await set(inviteRef(token), { sessionId: sessionId, expiresAt: session.expiresAt }); }
+  return { token: token, expiresAt: session.expiresAt };
+}
 export async function claimGuest(token, uid) {
   if (!/^[a-f0-9]{48}$/.test(token)) { throw new Error('La invitación no es válida.'); }
   const invitation = (await get(inviteRef(token))).val();
   if (!invitation || invitation.expiresAt <= Date.now()) { throw new Error('La invitación venció o no existe.'); }
-  const invitationClaim = await runTransaction(ref(db, 'invites/' + token + '/guestPhoneUid'), function (current) { return current === null || current === uid ? uid : undefined; });
-  if (!invitationClaim.committed) { throw new Error('Esta invitación ya fue usada.'); }
+  try { await set(ref(db, 'invites/' + token + '/guestPhoneUid'), uid); }
+  catch (error) { throw new Error('La invitación venció o ya fue usada.'); }
   try { await claimRole(invitation.sessionId, 'guestPhoneUid', uid); } catch (error) { throw new Error('La sesión ya tiene un familiar conectado.'); }
   return invitation.sessionId;
 }

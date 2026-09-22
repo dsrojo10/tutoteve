@@ -7,6 +7,22 @@ watchFirebaseConnection(function (connected) { diagnostics.firebase(connected); 
 function stop() { if (peer) { peer.close(); } if (stream) { stream.getTracks().forEach(function (track) { track.stop(); }); } }
 async function startGuestPeer() { peer = new RTCPeerConnection(rtcConfig); diagnostics.observe(peer); stream.getTracks().forEach(function (track) { peer.addTrack(track, stream); }); peer.addEventListener('track', function (event) { guestVideo.srcObject = event.streams[0]; diagnostics.remoteTrack(); guestVideo.play().catch(function () {}); }); const setRemote = wirePeer(peer, sessionId, 'tutoGuest', 'tuto', 'guest', diagnostics, signaling); signaling.watchDescription(sessionId, 'tutoGuest', 'guest', function (answer) { if (!peer.currentRemoteDescription) { setRemote(answer).then(function () { diagnostics.status('Conectando con tu familiar…'); }).catch(diagnostics.error); } }, diagnostics.error); await peer.setLocalDescription(await peer.createOffer()); await signaling.writeDescription(sessionId, 'tutoGuest', 'tuto', peer.localDescription); }
 start.addEventListener('click', async function () { if (!canUseWebRTC()) { diagnostics.error(new Error('Este navegador no dispone de WebRTC.')); return; } start.disabled = true; try { const user = await ensureAnonymousUser(); uid = user.uid; diagnostics.status('Vinculando el celular…'); sessionId = await signaling.claimTutoPhone(document.getElementById('pairing-code').value.trim(), uid); stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 24 } }, audio: true }); localVideo.srcObject = stream; inviteButton.hidden = false; endButton.hidden = false; diagnostics.status('Celular vinculado. Invita a un familiar.'); } catch (error) { diagnostics.error(error); start.disabled = false; } });
-inviteButton.addEventListener('click', async function () { inviteButton.disabled = true; try { const invitation = await signaling.createInvite(sessionId); const url = inviteUrl(invitation.token); document.getElementById('invite-link').value = url; await startGuestPeer(); if (navigator.share) { try { await navigator.share({ title: 'Videollamada con Tuto', text: 'Únete a la videollamada con Tuto.', url: url }); diagnostics.status('Invitación compartida. Esperando familiar…'); } catch (error) { document.getElementById('invite-fallback').hidden = false; diagnostics.status('Comparte el enlace con tu familiar.'); } } else { await navigator.clipboard.writeText(url); document.getElementById('invite-fallback').hidden = false; diagnostics.status('Enlace copiado. Compártelo con tu familiar.'); } } catch (error) { diagnostics.error(error); inviteButton.disabled = false; } });
+inviteButton.addEventListener('click', async function () {
+  inviteButton.disabled = true;
+  try {
+    const invitation = await signaling.createInvite(sessionId);
+    const url = inviteUrl(invitation.token);
+    document.getElementById('invite-link').value = url;
+    document.getElementById('invite-fallback').hidden = false;
+    if (!peer) { await startGuestPeer(); }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Videollamada con Tuto', text: 'Únete a la videollamada con Tuto.', url: url });
+        diagnostics.status('Invitación compartida. Esperando familiar…');
+      } catch (error) { diagnostics.status('Comparte el enlace con tu familiar.'); }
+    } else { diagnostics.status('Copia el enlace y compártelo con tu familiar.'); }
+  } catch (error) { diagnostics.error(error); }
+  finally { inviteButton.disabled = false; }
+});
 document.getElementById('copy-link').addEventListener('click', async function () { try { await navigator.clipboard.writeText(document.getElementById('invite-link').value); diagnostics.status('Enlace copiado.'); } catch (error) { diagnostics.error(error); } });
 endButton.addEventListener('click', async function () { try { await signaling.endSession(sessionId, uid); stop(); diagnostics.status('Llamada terminada.'); } catch (error) { diagnostics.error(error); } }); window.addEventListener('pagehide', stop);
