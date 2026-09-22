@@ -24,91 +24,107 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
   let active = false;
   let running = false;
   let restartCount = 0;
+  let recognitionAttempt = 0;
+  let abortedStreak = 0;
   let restartTimer;
-  let publishTimer;
   let lastPublished = '';
-  let finalIndexes = new Set();
   let lastEvent = '';
   let error = '';
-  function state() { report({ supported, running, restartCount, lastEvent, error, textLength: context.text().length }); }
+  function state() { report({ supported, running, restartCount, recognitionAttempt, lastEvent, error, textLength: context.text().length }); }
   function send() {
-    publishTimer = undefined;
     const value = context.text();
     if (value && value !== lastPublished) {
       lastPublished = value;
       Promise.resolve().then(() => publish(value)).catch(() => {});
     }
   }
-  function scheduleSend(immediate) {
-    if (publishTimer !== undefined) timers.clearTimeout(publishTimer);
-    publishTimer = timers.setTimeout(send, immediate ? 0 : 300);
-  }
-  function restart() {
+  function restart(delay) {
     if (!active || restartTimer !== undefined) return;
-    const delay = Math.min(1000 * 2 ** Math.min(restartCount, 3), 8000);
     restartTimer = timers.setTimeout(() => { restartTimer = undefined; if (active) begin(); }, delay);
     restartCount += 1;
     state();
   }
-  function begin() {
-    if (!active || running) return;
-    try { recognition.start(); }
-    catch (cause) {
-      error = cause?.name || 'Error';
-      lastEvent = 'error';
-      if (error === 'NotAllowedError' || error === 'SecurityError') active = false;
-      else restart();
-      state();
+  function restartDelay(reason) {
+    if (reason === 'aborted') {
+      const delay = Math.min(1600 * 2 ** Math.min(abortedStreak, 2), 8000);
+      abortedStreak += 1;
+      return delay;
     }
+    return reason ? 1500 : 850;
   }
-  if (supported) {
-    try { recognition = new SpeechRecognition(); }
-    catch { supported = false; }
-  }
-  if (recognition) {
-    recognition.lang = 'es-CO';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onstart = () => { running = true; lastEvent = 'start'; error = ''; finalIndexes = new Set(); if (!active) { try { recognition.stop(); } catch {} } state(); };
-    recognition.onresult = event => {
-      if (!active) return;
-      lastEvent = 'result';
-      let interim = '';
-      let hasFinal = false;
-      for (let index = 0; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const transcript = result[0]?.transcript || '';
-        if (result.isFinal) {
-          if (!finalIndexes.has(index)) { context.addFinal(transcript); finalIndexes.add(index); hasFinal = true; }
-        } else { interim += transcript + ' '; }
-      }
-      context.setInterim(interim);
-      restartCount = 0;
-      scheduleSend(hasFinal);
+  function configure(instance) {
+    instance.lang = 'es-CO';
+    instance.continuous = false;
+    instance.interimResults = false;
+    instance.onstart = () => {
+      if (recognition !== instance) return;
+      running = true;
+      lastEvent = 'start';
+      error = '';
+      if (!active) { try { instance.abort(); } catch {} }
       state();
     };
-    recognition.onerror = event => {
-      lastEvent = 'error'; error = event.error || 'Error';
+    instance.onresult = event => {
+      if (!active || recognition !== instance) return;
+      lastEvent = 'result';
+      let transcript = '';
+      for (let index = event.resultIndex || 0; index < event.results.length; index += 1) transcript += (event.results[index][0]?.transcript || '') + ' ';
+      if (transcript.trim()) {
+        context.addFinal(transcript);
+        abortedStreak = 0;
+        send();
+      }
+      state();
+    };
+    instance.onerror = event => {
+      if (recognition !== instance) return;
+      lastEvent = 'error';
+      error = event.error || 'Error';
       if (error === 'not-allowed' || error === 'service-not-allowed') active = false;
       state();
     };
-    recognition.onend = () => {
-      running = false; lastEvent = 'end'; finalIndexes = new Set(); context.setInterim('');
-      if (context.text()) scheduleSend(true);
-      if (active) restart();
+    instance.onend = () => {
+      if (recognition !== instance) return;
+      running = false;
+      const reason = error;
+      recognition = undefined;
+      lastEvent = 'end';
+      if (active) restart(restartDelay(reason));
       state();
     };
   }
+  function begin() {
+    if (!active || running) return;
+    let instance;
+    try {
+      instance = new SpeechRecognition();
+      recognitionAttempt += 1;
+      configure(instance);
+      recognition = instance;
+      instance.start();
+    }
+    catch (cause) {
+      error = cause?.name || 'Error';
+      lastEvent = 'error';
+      recognition = undefined;
+      if (!instance) {
+        supported = false;
+        active = false;
+      } else if (error === 'NotAllowedError' || error === 'SecurityError' || error === 'not-allowed' || error === 'service-not-allowed') active = false;
+      else restart(restartDelay(error));
+      state();
+    }
+  }
   state();
   return {
-    supported,
+    get supported() { return supported; },
     start() { if (!supported || active) return; active = true; begin(); },
     stop() {
       active = false;
       if (restartTimer !== undefined) timers.clearTimeout(restartTimer);
-      if (publishTimer !== undefined) timers.clearTimeout(publishTimer);
-      restartTimer = publishTimer = undefined;
-      if (recognition && running) { try { recognition.stop(); } catch {} }
+      restartTimer = undefined;
+      if (recognition) { try { recognition.abort ? recognition.abort() : recognition.stop(); } catch {} }
+      recognition = undefined;
       running = false; context.clear(); lastPublished = ''; state();
     },
   };
