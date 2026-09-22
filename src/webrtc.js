@@ -1,4 +1,5 @@
 import { pollStats } from './rtc-stats.js';
+import { observeVideo } from './video-diagnostics.js';
 export const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 export function sanitizedError(error) { const name = error && error.name ? error.name : 'Error'; const message = error && error.message ? String(error.message).replace(/[\r\n]+/g, ' ').slice(0, 180) : 'Operación no completada.'; return name + ': ' + message; }
 export function canUseWebRTC() { return typeof RTCPeerConnection === 'function' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
@@ -6,6 +7,7 @@ export function createDiagnostics(statusElement, debugElement, role) {
   const enabled = new URLSearchParams(location.search).get('debug') === '1';
   const details = { role, firebaseConnected: false, webRTCSupported: typeof RTCPeerConnection === 'function', links: {} };
   const cleanups = [];
+  const videoObservers = new Map();
   function render() {
     if (enabled) { debugElement.hidden = false; debugElement.textContent = JSON.stringify(details, null, 2); }
   }
@@ -32,6 +34,18 @@ export function createDiagnostics(statusElement, debugElement, role) {
     const stopStats = pollStats(peer, role === 'tv' ? 'inbound' : 'outbound', stats => {
       state.sample = (state.sample || 0) + 1;
       state.stats = stats;
+      const video = videoObservers.get(name);
+      if (video) {
+        state.playback = video.sample();
+        state.playbackSamples = state.playbackSamples || [];
+        state.playbackSamples.push({
+          sample: state.sample, seconds: state.playback.seconds,
+          currentTime: state.playback.currentTime,
+          framesDecoded: stats.video ? stats.video.map(item => item.framesDecoded) : [],
+          bytesReceived: stats.video ? stats.video.map(item => item.bytesReceived) : [],
+        });
+        state.playbackSamples = state.playbackSamples.slice(-6);
+      }
       state.tracks = [...peer.getSenders(), ...peer.getReceivers()].filter(item => item.track).map(item => ({
         kind: item.track.kind, readyState: item.track.readyState,
         enabled: item.track.enabled, muted: item.track.muted,
@@ -43,7 +57,7 @@ export function createDiagnostics(statusElement, debugElement, role) {
     cleanups.push(() => { stopStats(); events.forEach(event => peer.removeEventListener(event, update)); });
     update();
   }
-  function dispose() { cleanups.splice(0).forEach(cleanup => cleanup()); }
+  function dispose() { cleanups.splice(0).forEach(cleanup => cleanup()); videoObservers.clear(); }
   window.addEventListener('pagehide', dispose);
   render();
   return {
@@ -51,6 +65,11 @@ export function createDiagnostics(statusElement, debugElement, role) {
     status: message => { statusElement.textContent = message; },
     firebase: connected => { details.firebaseConnected = connected; render(); },
     observe,
+    observeVideo: (video, name) => {
+      const observer = observeVideo(video, enabled, snapshot => { link(name).playback = snapshot; render(); });
+      if (enabled) { videoObservers.set(name, observer); cleanups.push(observer.dispose); }
+      return observer;
+    },
     localCandidate: name => { link(name).localCandidates += 1; render(); },
     remoteCandidate: name => { link(name).remoteCandidates += 1; render(); },
     remoteTrack: name => { link(name).receivedTracks += 1; render(); },
