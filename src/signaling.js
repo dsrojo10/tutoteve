@@ -1,4 +1,4 @@
-import { get, onChildAdded, onValue, onDisconnect, push, ref, remove, runTransaction, set } from 'firebase/database';
+import { get, onChildAdded, onValue, onDisconnect, push, ref, remove, runTransaction, serverTimestamp, set } from 'firebase/database';
 import { db } from './firebase.js';
 
 export const SESSION_LIFETIME_MS = 15 * 60 * 1000;
@@ -53,4 +53,7 @@ export function watchCandidates(sessionId, link, side, callback) { return onChil
 export function watchRole(sessionId, role, callback) { return onValue(ref(db, 'sessions/' + sessionId + '/roles/' + role), function (snapshot) { callback(snapshot.val()); }); }
 export function endSession(sessionId, uid) { return set(ref(db, 'sessions/' + sessionId + '/endedBy'), uid); }
 export function watchEnd(sessionId, callback) { return onValue(ref(db, 'sessions/' + sessionId + '/endedBy'), function (snapshot) { callback(snapshot.val()); }); }
+export function watchSessionRemoved(sessionId, callback) { return onValue(ref(db, 'sessions/' + sessionId + '/ownerUid'), function (snapshot) { if (!snapshot.exists()) callback(); }); }
+export function writeCaption(sessionId, text) { return set(ref(db, 'sessions/' + sessionId + '/captions/current'), text ? { text: text, updatedAt: serverTimestamp() } : null); }
+export function watchCaption(sessionId, callback, onError) { return onValue(ref(db, 'sessions/' + sessionId + '/captions/current'), function (snapshot) { callback(snapshot.val()); }, onError); }
 export async function cleanupSession(sessionId, code) { await Promise.all([remove(sessionRef(sessionId)), code ? remove(codeRef(code)) : Promise.resolve()]); }

@@ -64,6 +64,7 @@ export function createDiagnostics(statusElement, debugElement, role) {
     dispose,
     status: message => { statusElement.textContent = message; },
     firebase: connected => { details.firebaseConnected = connected; render(); },
+    captions: state => { details.captions = state; render(); },
     observe,
     observeVideo: (video, name) => {
       const observer = observeVideo(video, enabled, snapshot => { link(name).playback = snapshot; render(); });
