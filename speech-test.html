@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diagnóstico de reconocimiento de voz</title>
+    <link rel="stylesheet" href="/src/speech-test.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Diagnóstico de voz</h1>
+      <p>Esta página solo prueba el reconocimiento de voz de Safari. No inicia videollamadas, no guarda audio y no envía información.</p>
+
+      <section aria-labelledby="info-title">
+        <h2 id="info-title">Información del navegador</h2>
+        <dl class="details">
+          <div><dt>SpeechRecognition</dt><dd id="support">Comprobando…</dd></div>
+          <div><dt>Idioma del navegador</dt><dd id="browser-language">Comprobando…</dd></div>
+          <div><dt>User agent</dt><dd id="user-agent">Comprobando…</dd></div>
+        </dl>
+      </section>
+
+      <div class="language-picker">
+        <label for="language">Idioma de reconocimiento</label>
+        <select id="language">
+          <option value="es-CO" selected>Español (Colombia)</option>
+          <option value="es-ES">Español (España)</option>
+        </select>
+      </div>
+
+      <section aria-labelledby="tests-title">
+        <h2 id="tests-title">Pruebas</h2>
+        <div class="actions">
+          <button id="test-recognition" class="primary" type="button">1. Probar reconocimiento solo</button>
+          <button id="test-microphone" class="primary" type="button">2. Probar con micrófono activo</button>
+          <button id="test-reverse" class="primary" type="button">3. Reconocimiento antes del micrófono</button>
+          <button id="stop-recognition" type="button">Detener reconocimiento</button>
+          <button id="stop-all" type="button">Detener todo</button>
+        </div>
+        <p id="status" class="status" role="status">Elige una prueba.</p>
+      </section>
+
+      <section aria-labelledby="mic-title">
+        <h2 id="mic-title">Pista de micrófono</h2>
+        <dl class="details">
+          <div><dt>Estado</dt><dd id="mic-state">Sin micrófono activo</dd></div>
+          <div><dt>readyState</dt><dd id="track-ready-state">—</dd></div>
+          <div><dt>enabled</dt><dd id="track-enabled">—</dd></div>
+          <div><dt>muted</dt><dd id="track-muted">—</dd></div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="result-title">
+        <h2 id="result-title">Texto reconocido</h2>
+        <output id="transcript" class="transcript">Aún no se obtuvo texto.</output>
+      </section>
+
+      <section aria-labelledby="log-title">
+        <h2 id="log-title">Registro de eventos</h2>
+        <p>Los tiempos son relativos al inicio de la prueba actual.</p>
+        <pre id="log" tabindex="0" role="log" aria-live="polite" aria-label="Registro de eventos"></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/speech-test.js"></script>
+  </body>
+</html>

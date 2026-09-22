@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [feature/mvp-call-flow]
+    branches: [feature/mvp-call-flow, experiment/ios-speech]
   workflow_dispatch:
 
 permissions:
