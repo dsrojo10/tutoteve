@@ -8,6 +8,7 @@ const elements = {
   status: document.querySelector('#status'),
   transcript: document.querySelector('#transcript'),
   log: document.querySelector('#log'),
+  recognitionAttempt: document.querySelector('#recognition-attempt'),
   micState: document.querySelector('#mic-state'),
   trackReadyState: document.querySelector('#track-ready-state'),
   trackEnabled: document.querySelector('#track-enabled'),
@@ -18,6 +19,7 @@ let recognition = null;
 let stream = null;
 let track = null;
 let testStartedAt = 0;
+let recognitionAttempt = 0;
 
 elements.support.textContent = Recognition ? 'Disponible' : 'No disponible';
 elements.browserLanguage.textContent = navigator.language || 'No disponible';
@@ -49,6 +51,15 @@ function refreshTrackState() {
   elements.trackReadyState.textContent = track.readyState;
   elements.trackEnabled.textContent = String(track.enabled);
   elements.trackMuted.textContent = String(track.muted);
+}
+
+function trackStateDescription() {
+  if (!track) return 'sin pista';
+  return `readyState=${track.readyState}, enabled=${track.enabled}, muted=${track.muted}`;
+}
+
+function recordTrackState(label) {
+  record(label, trackStateDescription());
 }
 
 function resetReport(name) {
@@ -125,19 +136,27 @@ function createRecognition(afterStart) {
       setStatus('El reconocimiento terminó sin texto. Revisa el registro.');
     }
     refreshTrackState();
+    recordTrackState('pista tras reconocimiento');
   };
   return instance;
 }
 
 function startRecognition(afterStart) {
+  if (recognition) {
+    record('inicio rechazado', 'ya hay un reconocimiento activo');
+    setStatus('Espera a que termine el reconocimiento actual.');
+    return false;
+  }
   const instance = createRecognition(afterStart);
-  if (!instance) return;
+  if (!instance) return false;
   try {
     record('inicio solicitado');
     instance.start();
+    return true;
   } catch (error) {
     record('start error', error.name);
     setStatus(`No se pudo iniciar: ${error.name}`);
+    return false;
   }
 }
 
@@ -196,8 +215,51 @@ async function runRecognitionFirst() {
   });
 }
 
+async function activateContinuousMicrophone() {
+  if (track?.readyState === 'live') {
+    refreshTrackState();
+    record('micrófono continuo', `ya estaba activo; se conserva la misma pista (${trackStateDescription()})`);
+    setStatus('El mismo micrófono continuo ya está activo.');
+    return;
+  }
+
+  stopRecognition();
+  stopMicrophone();
+  resetReport('4. micrófono continuo');
+  recognitionAttempt = 0;
+  elements.recognitionAttempt.textContent = String(recognitionAttempt);
+  setStatus('Solicitando el micrófono una sola vez…');
+  if (await startMicrophone()) {
+    record('micrófono continuo', `activo; ${trackStateDescription()}`);
+    setStatus('Micrófono continuo activo. Pulsa “Reconocer ahora”.');
+  }
+}
+
+function recognizeWithContinuousMicrophone() {
+  if (track?.readyState !== 'live') {
+    refreshTrackState();
+    record('recognitionAttempt', 'no iniciado: activa antes el micrófono continuo');
+    setStatus('Primero pulsa “Activar micrófono”.');
+    return;
+  }
+  if (recognition) {
+    record('recognitionAttempt', 'no iniciado: hay un reconocimiento activo');
+    setStatus('Espera a que termine el reconocimiento actual.');
+    return;
+  }
+
+  recognitionAttempt += 1;
+  elements.recognitionAttempt.textContent = String(recognitionAttempt);
+  record('recognitionAttempt', String(recognitionAttempt));
+  recordTrackState('pista antes de reconocimiento');
+  setStatus(`Reconocimiento ${recognitionAttempt} iniciado. Habla ahora.`);
+  startRecognition();
+}
+
 document.querySelector('#test-recognition').addEventListener('click', runRecognitionOnly);
 document.querySelector('#test-microphone').addEventListener('click', runWithMicrophone);
 document.querySelector('#test-reverse').addEventListener('click', runRecognitionFirst);
+document.querySelector('#activate-continuous-microphone').addEventListener('click', activateContinuousMicrophone);
+document.querySelector('#recognize-now').addEventListener('click', recognizeWithContinuousMicrophone);
 document.querySelector('#stop-recognition').addEventListener('click', stopRecognition);
 document.querySelector('#stop-all').addEventListener('click', stopAll);
