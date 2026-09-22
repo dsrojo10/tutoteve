@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TutoTeVe · Emisor</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="sender-layout">
+      <h1>TutoTeVe</h1>
+      <p id="status" class="status" role="status">Introduce el código que muestra el TV.</p>
+      <label for="pairing-code">Código del TV</label>
+      <input id="pairing-code" class="pairing-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" aria-describedby="status" />
+      <button id="start-camera" class="primary-button" type="button">Iniciar cámara</button>
+      <video id="local-video" class="local-video" autoplay muted playsinline aria-label="Vista previa de cámara"></video>
+      <pre id="debug" class="debug" hidden aria-live="polite"></pre>
+    </main>
+    <script type="module" src="/src/sender.js"></script>
+  </body>
+</html>

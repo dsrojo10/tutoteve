@@ -1,0 +1,27 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "pairingCodes": {
+      "$code": {
+        ".read": "auth != null && (!data.exists() || data.child('expiresAt').val() > now)",
+        ".write": "auth != null && ((!data.exists() && newData.child('ownerUid').val() === auth.uid && root.child('rooms').child(newData.child('sessionId').val()).child('ownerUid').val() === auth.uid) || (data.child('ownerUid').val() === auth.uid))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['sessionId', 'ownerUid', 'expiresAt']) && newData.child('sessionId').isString() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 1200000)"
+      }
+    },
+    "rooms": {
+      "$sessionId": {
+        ".read": "auth != null && data.child('expiresAt').val() > now",
+        ".write": "auth != null && ((!data.exists() && newData.hasChildren(['ownerUid', 'expiresAt']) && newData.child('ownerUid').val() === auth.uid && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 1200000) || (data.child('ownerUid').val() === auth.uid && !newData.exists()))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['ownerUid', 'expiresAt']) && newData.child('ownerUid').isString() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 1200000)",
+        "phoneUid": { ".write": "auth != null && root.child('rooms').child($sessionId).child('expiresAt').val() > now && ((data.val() === null && newData.val() === auth.uid) || data.val() === auth.uid)", ".validate": "newData.isString()" },
+        "offer": { ".write": "auth != null && root.child('rooms').child($sessionId).child('expiresAt').val() > now && root.child('rooms').child($sessionId).child('phoneUid').val() === auth.uid" },
+        "answer": { ".write": "auth != null && root.child('rooms').child($sessionId).child('expiresAt').val() > now && root.child('rooms').child($sessionId).child('ownerUid').val() === auth.uid" },
+        "candidates": {
+          "phone": { ".write": "auth != null && root.child('rooms').child($sessionId).child('expiresAt').val() > now && root.child('rooms').child($sessionId).child('phoneUid').val() === auth.uid" },
+          "tv": { ".write": "auth != null && root.child('rooms').child($sessionId).child('expiresAt').val() > now && root.child('rooms').child($sessionId).child('ownerUid').val() === auth.uid" }
+        }
+      }
+    }
+  }
+}
