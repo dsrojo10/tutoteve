@@ -9,10 +9,13 @@
   <body class="tv-body">
     <main class="tv-layout">
       <video id="remote-video" autoplay playsinline aria-label="Vídeo en vivo"></video>
+      <div id="startup-panel" class="tv-startup">
+        <button id="start-tv" class="primary-button" type="button">Iniciar TutoTeVe</button>
+      </div>
       <div class="tv-panel">
         <p id="status" class="status" role="status">Creando sala temporal…</p>
         <p class="tv-code" aria-label="Código de emparejamiento"><span id="pairing-code">------</span></p>
-        <button id="play-video" type="button">Activar reproducción</button>
+        <button id="play-video" type="button" hidden>Pulsa OK para ver y escuchar</button>
         <button id="end-call" type="button">Terminar llamada</button>
       </div>
       <pre id="debug" class="debug" hidden aria-live="polite"></pre>

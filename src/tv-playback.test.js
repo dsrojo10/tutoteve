@@ -2,62 +2,78 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTvPlayback } from './tv-playback.js';
 
-function fixture() {
+function fixture(playImplementation = null) {
   const tracks = [];
-  const stream = {
-    getTracks: () => tracks,
-    addTrack: track => tracks.push(track),
-  };
+  const stream = { getTracks: () => tracks, addTrack: track => tracks.push(track) };
   const listeners = new Map();
   const video = {
-    srcObject: null, paused: true, playCalls: 0,
-    play() { this.playCalls++; return Promise.resolve(); },
+    srcObject: null, paused: true, muted: false, playCalls: 0,
+    play() {
+      this.playCalls++;
+      if (playImplementation) return playImplementation(this);
+      this.paused = false;
+      return Promise.resolve();
+    },
     addEventListener: (event, callback) => listeners.set(event, callback),
     removeEventListener: event => listeners.delete(event),
   };
   const statuses = [];
-  const remoteTracks = [];
-  const events = [];
-  const diagnostics = {
-    status: value => statuses.push(value),
-    remoteTrack: value => remoteTracks.push(value),
-  };
-  const videoDiagnostics = { record: value => events.push(value) };
-  return { stream, tracks, video, statuses, remoteTracks, events, listeners,
-    playback: createTvPlayback(video, stream, diagnostics, videoDiagnostics) };
+  const fallback = { hidden: true };
+  const playback = createTvPlayback(video, stream,
+    { status: value => statuses.push(value), remoteTrack() {} },
+    { record() {} }, fallback);
+  return { stream, tracks, video, statuses, fallback, listeners, playback };
 }
 
-test('audio and video tracks share one MediaStream and assign srcObject once', async () => {
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('initial user activation primes muted playback before a remote stream exists', async () => {
   const f = fixture();
-  const audio = { kind: 'audio' };
-  const video = { kind: 'video' };
-  assert.equal(f.video.srcObject, f.stream);
-  f.playback.addTrack(audio);
-  f.playback.addTrack(video);
-  f.playback.addTrack(audio);
-  f.playback.addTrack(video);
-  await Promise.resolve();
-  await Promise.resolve();
-  assert.deepEqual(f.tracks, [audio, video]);
-  assert.equal(f.video.srcObject, f.stream);
-  assert.equal(f.events.filter(event => event === 'srcObject:assigned').length, 1);
+  f.playback.prime();
+  await tick();
   assert.equal(f.video.playCalls, 1);
-  assert.deepEqual(f.remoteTracks, ['guestTv', 'guestTv']);
-  f.listeners.get('playing')();
-  assert.equal(f.statuses.at(-1), 'Llamada activa');
+  assert.equal(f.video.muted, true);
+  assert.equal(f.fallback.hidden, true);
 });
 
-test('autoplay failure leaves manual playback available without repeated track calls', async () => {
+test('a later video track starts playback automatically on the primed element', async () => {
   const f = fixture();
-  f.video.play = function () { this.playCalls++; return Promise.reject(new Error('blocked')); };
+  f.playback.prime();
+  await tick();
+  f.playback.addTrack({ kind: 'audio' });
   f.playback.addTrack({ kind: 'video' });
-  await new Promise(resolve => setTimeout(resolve, 0));
-  assert.equal(f.statuses.at(-1), 'Vídeo recibido. Pulsa “Activar reproducción”.');
-  f.playback.play();
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await tick();
   assert.equal(f.video.playCalls, 2);
-  f.playback.stop();
+  assert.equal(f.video.srcObject, f.stream);
+  assert.equal(f.fallback.hidden, true);
+  assert.equal(f.video.muted, false);
+});
+
+test('rejected automatic playback reveals the manual OK fallback', async () => {
+  const f = fixture(video => { video.paused = true; return Promise.reject(new Error('autoplay')); });
+  f.playback.prime();
+  await tick();
+  f.playback.addTrack({ kind: 'video' });
+  await tick();
+  assert.equal(f.fallback.hidden, false);
+  assert.equal(f.statuses.at(-1), 'Pulsa OK para ver y escuchar');
+});
+
+test('successful fallback playback hides the button again', async () => {
+  let reject = true;
+  const f = fixture(video => {
+    if (reject) { video.paused = true; return Promise.reject(new Error('autoplay')); }
+    video.paused = false;
+    return Promise.resolve();
+  });
+  f.playback.prime();
+  await tick();
+  f.playback.addTrack({ kind: 'video' });
+  await tick();
+  assert.equal(f.fallback.hidden, false);
+  reject = false;
   f.playback.play();
-  await Promise.resolve();
-  assert.equal(f.video.playCalls, 2);
+  await tick();
+  assert.equal(f.fallback.hidden, true);
+  assert.equal(f.video.muted, false);
 });
