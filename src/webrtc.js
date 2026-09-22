@@ -1,29 +1,15 @@
 export const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-export function sanitizedError(error) {
-  const name = error && error.name ? error.name : 'Error';
-  const message = error && error.message ? String(error.message).slice(0, 180) : 'Operación no completada.';
-  return name + ': ' + message.replace(/[\r\n]+/g, ' ');
-}
-
-export function createDiagnostics(statusElement, debugElement) {
-  const enabled = new URLSearchParams(window.location.search).get('debug') === '1';
-  const details = { userAgent: navigator.userAgent, RTCPeerConnection: typeof window.RTCPeerConnection === 'function', getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), firebase: 'inicializando', stage: 'inicializando', firebaseErrorCode: '—', iceGatheringState: '—', signalingState: '—', connectionState: '—', iceConnectionState: '—', localIceCandidates: 0, remoteIceCandidates: 0, remoteVideoTrack: '—', videoCodec: '—', error: '—' };
+export function sanitizedError(error) { const name = error && error.name ? error.name : 'Error'; const message = error && error.message ? String(error.message).replace(/[\r\n]+/g, ' ').slice(0, 180) : 'Operación no completada.'; return name + ': ' + message; }
+export function canUseWebRTC() { return typeof RTCPeerConnection === 'function' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+export function createDiagnostics(statusElement, debugElement, role) {
+  const enabled = new URLSearchParams(location.search).get('debug') === '1'; const details = { role: role, firebaseConnected: false, webRTCSupported: canUseWebRTC(), signalingState: '—', iceConnectionState: '—', connectionState: '—', localCandidates: 0, remoteCandidates: 0, receivedTracks: 0, error: '—' };
   function render() { if (enabled) { debugElement.hidden = false; debugElement.textContent = JSON.stringify(details, null, 2); } }
-  function status(message) { statusElement.textContent = message; }
-  function observe(peer) {
-    function update() { details.iceGatheringState = peer.iceGatheringState || 'no disponible'; details.signalingState = peer.signalingState || 'no disponible'; details.connectionState = peer.connectionState || 'no disponible'; details.iceConnectionState = peer.iceConnectionState || 'no disponible'; render(); }
-    peer.addEventListener('icegatheringstatechange', update); peer.addEventListener('signalingstatechange', update); peer.addEventListener('connectionstatechange', update); peer.addEventListener('iceconnectionstatechange', update); update();
-  }
-  function localCandidate() { details.localIceCandidates += 1; render(); }
-  function remoteCandidate() { details.remoteIceCandidates += 1; render(); }
-  function remoteTrack(track, peer) {
-    details.remoteVideoTrack = track.kind;
-    try { const receiver = peer.getReceivers().filter(function (item) { return item.track && item.track.kind === 'video'; })[0]; const codecs = receiver && receiver.getParameters ? receiver.getParameters().codecs : []; details.videoCodec = codecs && codecs[0] ? codecs[0].mimeType : 'no disponible'; } catch (error) { details.videoCodec = 'no disponible'; }
-    render();
-  }
-  function firebase(connected) { details.firebase = connected ? 'conectado' : 'no conectado'; render(); }
-  function stage(name) { details.stage = name; details.firebaseErrorCode = '—'; render(); }
-  function error(error, failedStage) { if (failedStage) { stage(failedStage); } details.firebaseErrorCode = error && error.code ? String(error.code).slice(0, 80) : 'sin-codigo'; details.error = sanitizedError(error); render(); status('Error: ' + details.error); }
-  render(); return { status, observe, localCandidate, remoteCandidate, remoteTrack, firebase, stage, error };
+  function observe(peer) { function update() { details.signalingState = peer.signalingState || 'no disponible'; details.iceConnectionState = peer.iceConnectionState || 'no disponible'; details.connectionState = peer.connectionState || 'no disponible'; render(); } ['signalingstatechange', 'iceconnectionstatechange', 'connectionstatechange'].forEach(function (event) { peer.addEventListener(event, update); }); update(); }
+  render(); return { status: function (message) { statusElement.textContent = message; }, firebase: function (connected) { details.firebaseConnected = connected; render(); }, observe: observe, localCandidate: function () { details.localCandidates += 1; render(); }, remoteCandidate: function () { details.remoteCandidates += 1; render(); }, remoteTrack: function () { details.receivedTracks += 1; render(); }, error: function (error) { details.error = sanitizedError(error); render(); statusElement.textContent = 'Error: ' + details.error; } };
+}
+export function wirePeer(peer, sessionId, link, localSide, remoteSide, diagnostics, signaling) {
+  const queued = []; function add(candidate) { peer.addIceCandidate(new RTCIceCandidate(candidate)).then(function () { diagnostics.remoteCandidate(); }).catch(diagnostics.error); }
+  peer.addEventListener('icecandidate', function (event) { if (event.candidate) { diagnostics.localCandidate(); signaling.sendCandidate(sessionId, link, localSide, event.candidate).catch(diagnostics.error); } });
+  signaling.watchCandidates(sessionId, link, remoteSide, function (candidate) { if (peer.remoteDescription) { add(candidate); } else { queued.push(candidate); } });
+  return function setRemote(description) { return peer.setRemoteDescription(new RTCSessionDescription(description)).then(function () { queued.splice(0).forEach(add); }); };
 }

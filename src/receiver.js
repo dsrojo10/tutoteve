@@ -1,30 +1,9 @@
 import { auth, ensureAnonymousUser, watchFirebaseConnection } from './firebase.js';
-import { cleanupRoom, createRoom, sendCandidate, watchCandidates, watchDescription, writeDescription } from './signaling.js';
-import { createDiagnostics, rtcConfig } from './webrtc.js';
-
-const remoteVideo = document.getElementById('remote-video'); const codeElement = document.getElementById('pairing-code'); const diagnostics = createDiagnostics(document.getElementById('status'), document.getElementById('debug')); let peer; let room;
+import * as signaling from './signaling.js';
+import { createDiagnostics, rtcConfig, wirePeer } from './webrtc.js';
+const remoteVideo = document.getElementById('remote-video'); const diagnostics = createDiagnostics(document.getElementById('status'), document.getElementById('debug'), 'tv'); let room; let peer;
 watchFirebaseConnection(function (connected) { diagnostics.firebase(connected); });
-document.getElementById('play-video').addEventListener('click', async function () { try { await remoteVideo.play(); diagnostics.status('Reproducción activada.'); } catch (error) { diagnostics.error(error); } });
-document.getElementById('end-test').addEventListener('click', async function () { try { if (peer) { peer.close(); } if (room) { await cleanupRoom(room.sessionId, room.code); } diagnostics.status('Prueba cerrada y sala eliminada.'); } catch (error) { diagnostics.error(error); } });
-function addRemoteCandidate(candidate) { peer.addIceCandidate(new RTCIceCandidate(candidate)).then(function () { diagnostics.remoteCandidate(); }).catch(diagnostics.error); }
-async function startRoom() {
-  try {
-    if (typeof window.RTCPeerConnection !== 'function') { throw new Error('Este TV no dispone de RTCPeerConnection.'); }
-    diagnostics.stage('auth-anonymous');
-    const user = await ensureAnonymousUser();
-    if (!auth.currentUser || auth.currentUser.uid !== user.uid) { throw new Error('La autenticación anónima no quedó disponible.'); }
-    diagnostics.stage('create-room');
-    diagnostics.status('Creando sala temporal…'); room = await createRoom(user.uid, diagnostics.stage); codeElement.textContent = room.code; diagnostics.status('Introduce este código en el celular. La sala vence en 15 minutos.');
-    diagnostics.stage('listen-offer');
-    watchDescription(room.sessionId, 'offer', async function (offer) {
-      if (peer) { return; }
-      try {
-        peer = new RTCPeerConnection(rtcConfig); diagnostics.observe(peer);
-        peer.addEventListener('icecandidate', function (event) { if (event.candidate) { diagnostics.localCandidate(); sendCandidate(room.sessionId, 'tv', event.candidate).catch(diagnostics.error); } });
-        peer.addEventListener('track', function (event) { remoteVideo.srcObject = event.streams[0]; diagnostics.remoteTrack(event.track, peer); remoteVideo.play().catch(function () { diagnostics.status('Vídeo recibido. Pulsa “Activar reproducción”.'); }); });
-        await peer.setRemoteDescription(new RTCSessionDescription(offer)); watchCandidates(room.sessionId, 'phone', addRemoteCandidate); await peer.setLocalDescription(await peer.createAnswer()); await writeDescription(room.sessionId, 'answer', peer.localDescription); diagnostics.status('Respuesta enviada. Esperando vídeo…');
-      } catch (error) { diagnostics.error(error); }
-    }, function (error) { diagnostics.error(error, 'listen-offer'); });
-  } catch (error) { diagnostics.error(error); }
-}
-startRoom();
+document.getElementById('play-video').addEventListener('click', function () { remoteVideo.play().then(function () { diagnostics.status('Reproducción activada.'); }).catch(diagnostics.error); });
+async function receiveGuest(offer) { if (peer) { return; } peer = new RTCPeerConnection(rtcConfig); diagnostics.observe(peer); peer.addTransceiver('audio', { direction: 'recvonly' }); peer.addTransceiver('video', { direction: 'recvonly' }); peer.addEventListener('track', function (event) { remoteVideo.srcObject = event.streams[0]; diagnostics.remoteTrack(); remoteVideo.play().catch(function () { diagnostics.status('Vídeo recibido. Pulsa “Activar reproducción”.'); }); }); const setRemote = wirePeer(peer, room.sessionId, 'guestTv', 'tv', 'guest', diagnostics, signaling); await setRemote(offer); await peer.setLocalDescription(await peer.createAnswer()); await signaling.writeDescription(room.sessionId, 'guestTv', 'tv', peer.localDescription); diagnostics.status('Conectando con el familiar…'); }
+async function start() { try { const user = await ensureAnonymousUser(); if (!auth.currentUser || auth.currentUser.uid !== user.uid) { throw new Error('No se pudo iniciar la sesión temporal.'); } room = await signaling.createSession(user.uid); document.getElementById('pairing-code').textContent = room.code; diagnostics.status('Esperando celular de Tuto.'); signaling.watchRole(room.sessionId, 'tutoPhoneUid', function (value) { if (value) { diagnostics.status('Esperando familiar…'); } }); signaling.watchDescription(room.sessionId, 'guestTv', 'guest', function (offer) { receiveGuest(offer).catch(diagnostics.error); }, diagnostics.error); signaling.watchEnd(room.sessionId, function (endedBy) { if (endedBy) { if (peer) { peer.close(); } signaling.cleanupSession(room.sessionId, room.code).catch(diagnostics.error); diagnostics.status('Llamada terminada.'); } }); } catch (error) { diagnostics.error(error); } }
+document.getElementById('end-call').addEventListener('click', async function () { try { if (peer) { peer.close(); } if (room) { await signaling.cleanupSession(room.sessionId, room.code); } diagnostics.status('Llamada terminada.'); } catch (error) { diagnostics.error(error); } }); start();
