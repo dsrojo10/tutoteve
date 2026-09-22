@@ -8,6 +8,8 @@ function randomCode() { const value = new Uint32Array(1); crypto.getRandomValues
 function sessionRef(sessionId) { return ref(db, 'sessions/' + sessionId); }
 function codeRef(code) { return ref(db, 'pairingCodes/' + code); }
 function inviteRef(token) { return ref(db, 'invites/' + token); }
+function roleRef(sessionId, role) { return ref(db, 'sessions/' + sessionId + '/roles/' + role); }
+async function claimRole(sessionId, role, uid) { await set(roleRef(sessionId, role), uid); }
 
 export async function createSession(ownerUid) {
   const sessionId = randomHex(24); const expiresAt = Date.now() + SESSION_LIFETIME_MS;
@@ -23,8 +25,7 @@ export async function claimTutoPhone(code, uid) {
   if (!/^\d{6}$/.test(code)) { throw new Error('Introduce los seis dígitos del TV.'); }
   const pairing = (await get(codeRef(code))).val();
   if (!pairing || pairing.expiresAt <= Date.now()) { throw new Error('El código no existe o venció.'); }
-  const result = await runTransaction(ref(db, 'sessions/' + pairing.sessionId + '/roles/tutoPhoneUid'), function (current) { return current === null || current === uid ? uid : undefined; });
-  if (!result.committed) { throw new Error('Ese TV ya está vinculado a otro celular.'); }
+  try { await claimRole(pairing.sessionId, 'tutoPhoneUid', uid); } catch (error) { throw new Error('Ese TV ya está vinculado a otro celular.'); }
   return pairing.sessionId;
 }
 export async function createInvite(sessionId) { const token = randomHex(24); const expiresAt = Date.now() + SESSION_LIFETIME_MS; await set(inviteRef(token), { sessionId: sessionId, expiresAt: expiresAt }); return { token: token, expiresAt: expiresAt }; }
@@ -34,8 +35,7 @@ export async function claimGuest(token, uid) {
   if (!invitation || invitation.expiresAt <= Date.now()) { throw new Error('La invitación venció o no existe.'); }
   const invitationClaim = await runTransaction(ref(db, 'invites/' + token + '/guestPhoneUid'), function (current) { return current === null || current === uid ? uid : undefined; });
   if (!invitationClaim.committed) { throw new Error('Esta invitación ya fue usada.'); }
-  const roleClaim = await runTransaction(ref(db, 'sessions/' + invitation.sessionId + '/roles/guestPhoneUid'), function (current) { return current === null || current === uid ? uid : undefined; });
-  if (!roleClaim.committed) { throw new Error('La sesión ya tiene un familiar conectado.'); }
+  try { await claimRole(invitation.sessionId, 'guestPhoneUid', uid); } catch (error) { throw new Error('La sesión ya tiene un familiar conectado.'); }
   return invitation.sessionId;
 }
 export function writeDescription(sessionId, link, side, description) { return set(ref(db, 'sessions/' + sessionId + '/signals/' + link + '/' + side + '/description'), { type: description.type, sdp: description.sdp }); }
