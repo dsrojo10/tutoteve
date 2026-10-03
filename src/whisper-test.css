@@ -1,0 +1,18 @@
+:root { font-family: system-ui, sans-serif; color: #182536; background: #f5f7fa; }
+body { margin: 0; }
+main { max-width: 48rem; margin: auto; padding: 1rem; }
+section { background: white; border: 1px solid #c7d1dd; border-radius: .6rem; padding: 1rem; margin: 1rem 0; }
+h1, h2, h3 { line-height: 1.2; }
+dl { margin: 0; }
+dl > div { display: flex; gap: 1rem; justify-content: space-between; border-bottom: 1px solid #e1e6ec; padding: .55rem 0; }
+dt { font-weight: 600; }
+dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.buttons { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
+button { font: inherit; font-weight: 700; min-height: 3rem; padding: .6rem 1rem; border: 2px solid #17498a; border-radius: .4rem; color: white; background: #17498a; }
+button:disabled { opacity: .55; }
+button:focus-visible { outline: 3px solid #ed9e17; outline-offset: 3px; }
+.hint { color: #4c5b6e; }
+.transcript { min-height: 4rem; border: 1px solid #9aaabc; border-radius: .3rem; padding: .7rem; white-space: pre-wrap; }
+li { margin: .7rem 0; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 35rem) { dl > div { display: block; } dd { text-align: left; margin-top: .2rem; } }

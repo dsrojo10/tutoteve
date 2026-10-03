@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prueba local de Whisper · TutoTeVe</title>
+  <link rel="stylesheet" href="/src/whisper-test.css" />
+  <script type="module" src="/src/whisper-test.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Prueba local de Whisper</h1>
+    <p>Audio procesado localmente en este dispositivo.</p>
+    <p>Prueba experimental de 60 segundos con fragmentos de 2,5 segundos. Mantén esta página abierta y habla en español. El modelo se descarga una vez y puede quedar en la caché del navegador.</p>
+
+    <section aria-labelledby="setup-heading">
+      <h2 id="setup-heading">Preparación</h2>
+      <dl>
+        <div><dt>WebGPU disponible</dt><dd id="webgpu">Comprobando…</dd></div>
+        <div><dt>Backend usado</dt><dd id="backend">Sin iniciar</dd></div>
+        <div><dt>Modelo</dt><dd>onnx-community/whisper-tiny (multilingüe)</dd></div>
+        <div><dt>Descarga aproximada</dt><dd id="model-size">WebGPU ~120 MB; WASM ~41 MB, más archivos auxiliares</dd></div>
+        <div><dt>Carga del modelo</dt><dd id="model-status">Pendiente</dd></div>
+        <div><dt>Tiempo de carga</dt><dd id="load-time">—</dd></div>
+        <div><dt>Memoria</dt><dd id="memory">Memoria total no disponible mediante API estándar</dd></div>
+      </dl>
+      <p id="status" role="status">Lista para iniciar.</p>
+      <div class="buttons">
+        <button id="start" type="button">Iniciar prueba</button>
+        <button id="stop" type="button" disabled>Detener prueba</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="results-heading">
+      <h2 id="results-heading">Resultados</h2>
+      <dl>
+        <div><dt>Tiempo capturado</dt><dd id="elapsed">0,0 s / 60 s</dd></div>
+        <div><dt>Chunks capturados</dt><dd id="chunks">0</dd></div>
+        <div><dt>Backlog</dt><dd id="backlog">0 chunks · 0,0 s de audio</dd></div>
+        <div><dt>Inferencia actual</dt><dd id="inference">—</dd></div>
+        <div><dt>Latencia práctica</dt><dd id="latency">—</dd></div>
+      </dl>
+      <p class="hint">La latencia es una estimación desde la última voz detectada por nivel de audio hasta que aparece el texto. Si la voz cruza un límite de chunk, la estimación puede variar.</p>
+      <h3>Texto reconocido</h3>
+      <div id="transcript" class="transcript" aria-live="polite">Aún no hay texto.</div>
+      <h3>Detalle por chunk</h3>
+      <ol id="chunk-list"></ol>
+    </section>
+
+    <section aria-labelledby="errors-heading">
+      <h2 id="errors-heading">Errores y observaciones</h2>
+      <pre id="errors" role="status">Sin errores.</pre>
+      <p>Observa si el iPhone se calienta, se bloquea o cierra la página. La memoria total del proceso y la temperatura no tienen una API web estándar para esta medición.</p>
+    </section>
+  </main>
+</body>
+</html>
