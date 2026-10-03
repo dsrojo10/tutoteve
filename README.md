@@ -48,7 +48,7 @@ npm run dev
 3. Abre `/` en el celular, introduce el código y pulsa **Iniciar cámara**. Autoriza cámara y micrófono.
 4. RTDB entrega la offer/answer e intercambia ICE candidates; el TV reproduce el stream. Pulsa **Activar reproducción** si su navegador bloquea autoplay.
 5. Mantén el vídeo por tres minutos y usa `?debug=1` para registrar estados sin revelar SDP, ICE, UID completo ni credenciales.
-6. Pulsa **Terminar prueba** en el TV para borrar la sala; la desconexión del TV también programa su limpieza.
+6. Pulsa **Terminar prueba** en el TV para borrar la sala y el código. Una desconexión breve de Firebase no borra la sesión; si queda abandonada, las reglas impiden acceder a ella después de `expiresAt`.
 
 ## Estructura RTDB
 
