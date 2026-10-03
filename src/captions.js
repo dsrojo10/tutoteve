@@ -27,15 +27,25 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
   let recognitionAttempt = 0;
   let abortedStreak = 0;
   let restartTimer;
+  let attemptWatchdog;
+  let stopWatchdog;
   let lastPublished = '';
   let lastEvent = '';
+  let lastFinishReason = '';
+  let watchdogTriggered = false;
   let error = '';
-  function state() { report({ supported, running, restartCount, recognitionAttempt, lastEvent, error, textLength: context.text().length }); }
+  function state() { report({ supported, running, restartCount, recognitionAttempt, lastEvent, lastFinishReason, watchdogTriggered, error, textLength: context.text().length }); }
+  function clearAttemptTimers() {
+    if (attemptWatchdog !== undefined) timers.clearTimeout(attemptWatchdog);
+    if (stopWatchdog !== undefined) timers.clearTimeout(stopWatchdog);
+    attemptWatchdog = undefined;
+    stopWatchdog = undefined;
+  }
   function send() {
     const value = context.text();
     if (value && value !== lastPublished) {
       lastPublished = value;
-      Promise.resolve().then(() => publish(value)).catch(() => {});
+      try { Promise.resolve(publish(value)).catch(() => {}); } catch {}
     }
   }
   function restart(delay) {
@@ -52,6 +62,31 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
     }
     return reason ? 1500 : 850;
   }
+  function finishAttempt(instance, reason) {
+    if (recognition !== instance) return;
+    clearAttemptTimers();
+    recognition = undefined;
+    running = false;
+    lastFinishReason = reason;
+    lastEvent = reason === 'end' ? 'end' : reason;
+    if (active) restart(restartDelay(error));
+    state();
+  }
+  function requestStop(instance) {
+    if (recognition !== instance) return;
+    if (attemptWatchdog !== undefined) timers.clearTimeout(attemptWatchdog);
+    attemptWatchdog = undefined;
+    try { instance.stop(); } catch {}
+    if (recognition === instance && active) {
+      stopWatchdog = timers.setTimeout(() => {
+        if (recognition !== instance) return;
+        watchdogTriggered = true;
+        lastEvent = 'stop-watchdog';
+        finishAttempt(instance, 'stop-watchdog');
+        try { instance.abort(); } catch {}
+      }, 1800);
+    }
+  }
   function configure(instance) {
     instance.lang = 'es-CO';
     instance.continuous = false;
@@ -61,6 +96,14 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
       running = true;
       lastEvent = 'start';
       error = '';
+      watchdogTriggered = false;
+      attemptWatchdog = timers.setTimeout(() => {
+        if (recognition !== instance) return;
+        watchdogTriggered = true;
+        lastEvent = 'attempt-watchdog';
+        finishAttempt(instance, 'attempt-watchdog');
+        try { instance.abort(); } catch {}
+      }, 11000);
       if (!active) { try { instance.abort(); } catch {} }
       state();
     };
@@ -68,11 +111,14 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
       if (!active || recognition !== instance) return;
       lastEvent = 'result';
       let transcript = '';
-      for (let index = event.resultIndex || 0; index < event.results.length; index += 1) transcript += (event.results[index][0]?.transcript || '') + ' ';
+      for (let index = event.resultIndex || 0; index < event.results.length; index += 1) {
+        if (event.results[index].isFinal) transcript += (event.results[index][0]?.transcript || '') + ' ';
+      }
       if (transcript.trim()) {
         context.addFinal(transcript);
         abortedStreak = 0;
         send();
+        requestStop(instance);
       }
       state();
     };
@@ -84,17 +130,11 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
       state();
     };
     instance.onend = () => {
-      if (recognition !== instance) return;
-      running = false;
-      const reason = error;
-      recognition = undefined;
-      lastEvent = 'end';
-      if (active) restart(restartDelay(reason));
-      state();
+      finishAttempt(instance, 'end');
     };
   }
   function begin() {
-    if (!active || running) return;
+    if (!active || running || recognition) return;
     let instance;
     try {
       instance = new SpeechRecognition();
@@ -123,9 +163,12 @@ export function createSpeechCaptions(SpeechRecognition, publish, report, timers 
       active = false;
       if (restartTimer !== undefined) timers.clearTimeout(restartTimer);
       restartTimer = undefined;
-      if (recognition) { try { recognition.abort ? recognition.abort() : recognition.stop(); } catch {} }
+      clearAttemptTimers();
+      const instance = recognition;
       recognition = undefined;
-      running = false; context.clear(); lastPublished = ''; state();
+      running = false;
+      if (instance) { try { instance.abort ? instance.abort() : instance.stop(); } catch {} }
+      context.clear(); lastPublished = ''; state();
     },
   };
 }

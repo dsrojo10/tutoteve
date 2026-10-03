@@ -44,11 +44,12 @@ test('recognition constructor failure also leaves captions inert', () => {
   captions.stop();
 });
 
-test('short sessions create a new recognizer, publish finals, and restart after end', async () => {
+test('final result calls stop, publishes, and onend schedules exactly one restart', async () => {
   const timers = fakeTimers(); const published = []; const states = []; const recognitions = [];
   class FakeRecognition {
     constructor() { recognitions.push(this); this.starts = 0; }
     start() { this.starts += 1; this.onstart(); }
+    stop() { this.stops = (this.stops || 0) + 1; }
     abort() { this.onend(); }
   }
   const captions = createSpeechCaptions(FakeRecognition, value => published.push(value), state => states.push(state), timers);
@@ -59,14 +60,57 @@ test('short sessions create a new recognizer, publish finals, and restart after 
   recognitions[0].onresult({ resultIndex: 0, results: [{ 0: { transcript: 'Hola. ' }, isFinal: true }] });
   await Promise.resolve();
   assert.deepEqual(published, ['Hola.']);
+  assert.equal(recognitions[0].stops, 1);
   recognitions[0].onend();
   assert.equal(states.at(-1).running, false);
   assert.equal(timers.run(), 850);
   assert.equal(recognitions.length, 2);
   assert.notEqual(recognitions[0], recognitions[1]);
   assert.equal(states.at(-1).recognitionAttempt, 2);
+  assert.equal(states.at(-1).restartCount, 1);
+  assert.equal(timers.pending.size, 1);
   captions.stop();
   assert.equal(timers.pending.size, 0);
+});
+
+test('result without onend is finished by the stop watchdog and starts one new recognizer', () => {
+  const timers = fakeTimers(); const recognitions = []; const states = [];
+  class FakeRecognition {
+    constructor() { recognitions.push(this); }
+    start() { this.onstart(); }
+    stop() { this.stops = (this.stops || 0) + 1; }
+    abort() { this.aborted = true; }
+  }
+  const captions = createSpeechCaptions(FakeRecognition, () => {}, state => states.push(state), timers);
+  captions.start();
+  recognitions[0].onresult({ resultIndex: 0, results: [{ 0: { transcript: 'Hola.' }, isFinal: true }] });
+  assert.equal(recognitions[0].stops, 1);
+  assert.equal(timers.run(), 1800);
+  assert.equal(recognitions[0].aborted, true);
+  assert.equal(states.at(-1).lastFinishReason, 'stop-watchdog');
+  assert.equal(states.at(-1).watchdogTriggered, true);
+  assert.equal(timers.run(), 850);
+  assert.equal(recognitions.length, 2);
+  captions.stop();
+});
+
+test('a late onend after the watchdog does not schedule a second restart', () => {
+  const timers = fakeTimers(); const recognitions = [];
+  class FakeRecognition {
+    constructor() { recognitions.push(this); }
+    start() { this.onstart(); }
+    stop() {}
+    abort() {}
+  }
+  const captions = createSpeechCaptions(FakeRecognition, () => {}, () => {}, timers);
+  captions.start();
+  recognitions[0].onresult({ resultIndex: 0, results: [{ 0: { transcript: 'Hola.' }, isFinal: true }] });
+  timers.run();
+  recognitions[0].onend();
+  assert.equal(timers.pending.size, 1);
+  assert.equal(timers.run(), 850);
+  assert.equal(recognitions.length, 2);
+  captions.stop();
 });
 
 test('aborted retries with a longer delay and permission errors do not retry', () => {
