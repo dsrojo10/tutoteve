@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prueba local whisper.cpp · TutoTeVe</title>
+    <style>
+      :root { font: 17px/1.5 system-ui, sans-serif; color: #17212b; background: #f5f7fa; }
+      body { max-width: 48rem; margin: auto; padding: 1rem; }
+      h1 { line-height: 1.2; }
+      .card { background: white; border-radius: 1rem; padding: 1rem 1.25rem; margin: 1rem 0; }
+      dl { display: grid; grid-template-columns: minmax(10rem, 1fr) 2fr; gap: .4rem 1rem; }
+      dt { font-weight: 600; } dd { margin: 0; overflow-wrap: anywhere; }
+      button { font: inherit; padding: .7rem 1rem; margin: .3rem .4rem .3rem 0; border-radius: .5rem; border: 2px solid #184e77; background: #184e77; color: white; }
+      button:disabled { opacity: .55; } button:focus-visible { outline: 3px solid #e3a008; outline-offset: 3px; }
+      #transcript { white-space: pre-wrap; min-height: 5rem; }
+      #errors { color: #a21d23; white-space: pre-wrap; }
+      @media (max-width: 32rem) { dl { grid-template-columns: 1fr; gap: 0; } dd { margin-bottom: .6rem; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Prueba local de whisper.cpp en iPhone</h1>
+      <p>Audio procesado localmente en este dispositivo.</p>
+      <p>Experimento aislado: el modelo se descarga una vez desde Hugging Face; ninguna muestra de audio se envía a servidores. La captura termina automáticamente a los 60 segundos.</p>
+      <div class="card">
+        <button id="load">Cargar modelo</button>
+        <button id="start" disabled>Iniciar prueba de 60 s</button>
+        <button id="stop" disabled>Detener</button>
+        <dl>
+          <dt>Modelo</dt><dd>ggml-tiny-q5_1.bin (Whisper tiny multilingüe, Q5_1)</dd>
+          <dt>Idioma</dt><dd>es</dd>
+          <dt>Arquitectura</dt><dd>whisper.cpp WASM SIMD, un hilo</dd>
+          <dt>WASM SIMD disponible</dt><dd id="simd">Comprobando…</dd>
+          <dt>Estado de carga</dt><dd id="load-status">Sin cargar</dd>
+          <dt>Descargados</dt><dd id="download">0 MB</dd>
+          <dt>Tiempo de carga</dt><dd id="load-time">—</dd>
+          <dt>Memoria WASM asignada</dt><dd id="wasm-memory">—</dd>
+          <dt>Micrófono</dt><dd id="mic">Inactivo</dd>
+          <dt>Frecuencia real</dt><dd id="sample-rate">—</dd>
+          <dt>Chunks capturados</dt><dd id="chunks">0</dd>
+          <dt>Backlog</dt><dd id="backlog">0</dd>
+          <dt>Última inferencia</dt><dd id="inference">—</dd>
+          <dt>Uptime de prueba</dt><dd id="uptime">0 s</dd>
+        </dl>
+      </div>
+      <section class="card" aria-labelledby="text-heading">
+        <h2 id="text-heading">Texto reconocido</h2>
+        <div id="transcript" aria-live="polite"></div>
+      </section>
+      <section class="card" aria-labelledby="error-heading">
+        <h2 id="error-heading">Errores</h2>
+        <div id="errors" role="alert">Ninguno</div>
+      </section>
+    </main>
+    <script type="module" src="/src/whispercpp-test.js"></script>
+  </body>
+</html>

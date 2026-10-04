@@ -1,0 +1,9 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -60,5 +59,0 @@
+-    # TODO: without these, we get the following error:
+-    #       wasm-ld: error: --shared-memory is disallowed by whisper.cpp.o because it was not compiled with 'atomics' or 'bulk-memory' features.
+-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -pthread")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+-
